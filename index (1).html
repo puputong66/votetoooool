@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>即時表決</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#f6f5f1; --surface:#ffffff; --text:#1f1f1c; --muted:#6b6a64; --line:#dcdad2;
+  --accent:#2f5fd0; --accent-soft:#dfe7fa; --bar:#b9c9f2; --ok:#1f7a4d; --warn:#b3481f; --on-accent:#fff;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --bg:#16161a; --surface:#202026; --text:#f0efea; --muted:#9d9c95; --line:#35353d;
+    --accent:#7fa1ff; --accent-soft:#26335c; --bar:#33437a; --ok:#6fd0a0; --warn:#ff9c72; --on-accent:#101018;
+  }
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  line-height:1.5;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+header h1{font-size:15px;font-weight:600;color:var(--muted);margin:0;letter-spacing:.04em;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.badge{font-size:12px;padding:3px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.badge.closed{background:var(--line);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn);display:inline-block}
+.dot.on{background:var(--ok)}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--text);padding:8px 14px;border-radius:10px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.danger{color:var(--warn)}
+.btn:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=password]{width:100%;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input:focus{outline:2px solid var(--accent);outline-offset:0}
+label.q{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px}
+#question{font-size:clamp(24px,5vw,38px);font-weight:700;line-height:1.3;margin:0 0 22px;word-break:break-word}
+.opts{display:flex;flex-direction:column;gap:12px}
+.opt{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  background:var(--surface);color:var(--text);border:2px solid var(--line);border-radius:16px;padding:18px;min-height:68px}
+.opt.clickable{cursor:pointer}
+.opt.clickable:active{transform:scale(.99)}
+.opt.selected{border-color:var(--accent)}
+.opt .fill{position:absolute;inset:0 auto 0 0;background:var(--bar);opacity:.55;width:0;transition:width .45s ease}
+.opt .letter{position:relative;flex:none;width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700}
+.opt.selected .letter{background:var(--accent);color:var(--on-accent)}
+.opt .label{position:relative;flex:1;font-size:clamp(18px,3.6vw,26px);font-weight:600;word-break:break-word}
+.opt .num{position:relative;font-variant-numeric:tabular-nums;font-size:clamp(18px,3.6vw,26px);font-weight:700;white-space:nowrap}
+.opt .num small{font-weight:500;color:var(--muted);margin-left:6px;font-size:.65em}
+.meta{margin-top:18px;color:var(--muted);font-size:15px;min-height:24px;word-break:break-word}
+.msg{margin-top:12px;color:var(--warn);font-size:14px}
+.empty{padding:60px 0;text-align:center;color:var(--muted);font-size:18px}
+#host{margin-top:36px}
+#host h2{font-size:16px;margin:0 0 4px}
+#host p.hint{margin:0 0 6px;color:var(--muted);font-size:13px}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.row .ltr{flex:none;width:26px;text-align:center;color:var(--muted);font-weight:600}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.setup{border-color:var(--warn)}
+.setup code{background:var(--bg);padding:1px 6px;border-radius:6px}
+body.proj main{max-width:1100px}
+body.proj #question{font-size:clamp(34px,6vw,64px)}
+body.proj .opt{padding:26px;min-height:96px}
+body.proj .opt .label,body.proj .opt .num{font-size:clamp(26px,4.4vw,48px)}
+body.proj .opt .letter{width:56px;height:56px;font-size:26px}
+body.proj .meta{font-size:22px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>即時表決 <span id="roomTag" class="badge hide"></span><span id="statusBadge" class="badge hide"></span><span id="conn" class="dot" title="連線狀態"></span></h1>
+    <div id="topBtns"></div>
+  </header>
+
+  <!-- 進入畫面 -->
+  <section id="join" class="card hide">
+    <label class="q" for="roomIn">房間代碼（向主持人詢問）</label>
+    <input type="text" id="roomIn" autocomplete="off" maxlength="30" placeholder="例如：team2026">
+    <label class="q" for="nameIn">你的名字</label>
+    <input type="text" id="nameIn" autocomplete="off" maxlength="40" placeholder="例如：小明">
+    <div id="pinWrap" class="hide">
+      <label class="q" for="pinIn">主持人密碼</label>
+      <input type="password" id="pinIn" autocomplete="off">
+    </div>
+    <div class="actions"><button class="btn primary" id="joinBtn">進入</button></div>
+    <div id="joinMsg" class="msg"></div>
+  </section>
+
+  <!-- 設定未完成提示 -->
+  <section id="setup" class="card setup hide">
+    <strong>尚未設定 Firebase</strong>
+    <p>請打開 <code>index.html</code>，把 <code>firebaseConfig</code> 換成你自己專案的設定值，再重新上傳。</p>
+  </section>
+
+  <section id="stage" class="hide"></section>
+  <div id="meta" class="meta"></div>
+  <div id="msg" class="msg"></div>
+
+  <!-- 主持人控制台 -->
+  <section id="host" class="card hide">
+    <h2>主持人控制台</h2>
+    <p class="hint">現場輸入題目與選項，按「開始投票」，所有人的畫面會即時更新。每次開始都是新的一輪，票數從 0 開始。</p>
+    <label class="q" for="qInput">題目</label>
+    <input type="text" id="qInput" maxlength="200" placeholder="例如：下週的聚餐要吃哪一個？">
+    <label class="q">選項</label>
+    <div id="optList"></div>
+    <div class="actions"><button class="btn" id="addOpt">＋ 新增選項</button></div>
+    <div class="actions">
+      <button class="btn primary" id="startBtn">開始投票（新的一輪）</button>
+      <button class="btn" id="toggleBtn" disabled>結束投票</button>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+/* ============================================================
+   ★ 設定區：把下面換成你在 Firebase 取得的設定
+   ============================================================ */
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDjluQ3WOEZ8L2i8G8XMN2WvltkEaVB4kA",
+  authDomain: "team-vote-dd103.firebaseapp.com",
+  databaseURL: "https://team-vote-dd103-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "team-vote-dd103",
+  storageBucket: "team-vote-dd103.firebasestorage.app",
+  messagingSenderId: "548939551273",
+  appId: "1:548939551273:web:6f0b8eac40f4d282d64238"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// 主持人密碼（輕量防誤觸，不是真正的資安機制，請不要用你常用的密碼）
+const HOST_PIN = "0522";
+/* ============================================================ */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+
+const $ = id => document.getElementById(id);
+const state = { room:"", name:"", isHost:false, poll:null, votes:{}, projection:false, busy:false };
+let db = null, unsubs = [];
+let draft = { question:"", options:["",""] };
+let draftFilled = false;
+
+const wantHost = location.hash === "#host";
+const store = {
+  get(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return ""; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+};
+const norm = s => s.trim().toLowerCase();
+const roomKey = s => encodeURIComponent(norm(s)).replace(/\./g,"%2E");
+const nameKey = s => encodeURIComponent(norm(s)).replace(/\./g,"%2E");
+const setMsg = t => { $("msg").textContent = t || ""; };
+
+/* ---------- 啟動 ---------- */
+if(firebaseConfig.apiKey === "YOUR_API_KEY"){
+  $("setup").classList.remove("hide");
+} else {
+  try{
+    db = getDatabase(initializeApp(firebaseConfig));
+    onValue(ref(db, ".info/connected"), s => $("conn").classList.toggle("on", s.val() === true));
+    showJoin();
+  }catch(e){
+    $("setup").classList.remove("hide");
+    $("setup").querySelector("p").textContent = "Firebase 初始化失敗：" + e.message;
+  }
+}
+
+/* ---------- 進入畫面 ---------- */
+function showJoin(){
+  $("join").classList.remove("hide");
+  $("roomIn").value = store.get("lv_room");
+  $("nameIn").value = store.get("lv_name") || (wantHost ? "主持人" : "");
+  if(wantHost) $("pinWrap").classList.remove("hide");
+  $("joinBtn").addEventListener("click", tryJoin);
+  [$("roomIn"),$("nameIn"),$("pinIn")].forEach(el => el.addEventListener("keydown", e => { if(e.key === "Enter") tryJoin(); }));
+}
+
+function tryJoin(){
+  const room = $("roomIn").value.trim(), name = $("nameIn").value.trim();
+  const jm = $("joinMsg"); jm.textContent = "";
+  if(!room){ jm.textContent = "請輸入房間代碼。"; return; }
+  if(!name){ jm.textContent = "請輸入你的名字。"; return; }
+  if(wantHost && $("pinIn").value !== HOST_PIN){ jm.textContent = "主持人密碼不正確。"; return; }
+  store.set("lv_room", room); store.set("lv_name", name);
+  state.room = roomKey(room); state.name = name; state.isHost = wantHost;
+  $("join").classList.add("hide");
+  enterRoom(room);
+}
+
+/* ---------- 房間 ---------- */
+function enterRoom(displayRoom){
+  const tag = $("roomTag"); tag.textContent = "房間 " + displayRoom; tag.classList.remove("hide");
+  $("stage").classList.remove("hide");
+
+  if(state.isHost){
+    $("host").classList.remove("hide");
+    renderOptList();
+    $("qInput").addEventListener("input", e => { draft.question = e.target.value; });
+    $("addOpt").addEventListener("click", () => { if(draft.options.length < 10){ draft.options.push(""); renderOptList(); } });
+    $("startBtn").addEventListener("click", startRound);
+    $("toggleBtn").addEventListener("click", toggleStatus);
+    renderTopBtns();
+  }
+
+  const base = "rooms/" + state.room;
+  unsubs.push(onValue(ref(db, base + "/poll"), snap => {
+    state.poll = snap.val();
+    if(state.isHost && state.poll && !draftFilled){
+      draftFilled = true;
+      draft.question = state.poll.question || "";
+      draft.options = (state.poll.options || []).map(o => o.label);
+      while(draft.options.length < 2) draft.options.push("");
+      $("qInput").value = draft.question;
+      renderOptList();
+    }
+    renderStage();
+  }, e => setMsg("讀取題目失敗：" + e.message)));
+  unsubs.push(onValue(ref(db, base + "/votes"), snap => {
+    state.votes = snap.val() || {};
+    renderStage();
+  }, e => setMsg("讀取票數失敗：" + e.message)));
+  renderStage();
+}
+
+/* ---------- 主持人操作 ---------- */
+function renderOptList(){
+  const box = $("optList"); box.textContent = "";
+  draft.options.forEach((val, i) => {
+    const row = document.createElement("div"); row.className = "row";
+    const l = document.createElement("span"); l.className = "ltr"; l.textContent = String.fromCharCode(65+i);
+    const inp = document.createElement("input"); inp.type = "text"; inp.value = val; inp.maxLength = 80;
+    inp.placeholder = "選項 " + String.fromCharCode(65+i);
+    inp.addEventListener("input", () => { draft.options[i] = inp.value; });
+    const del = document.createElement("button"); del.className = "btn danger"; del.textContent = "刪除";
+    del.disabled = draft.options.length <= 2;
+    del.addEventListener("click", () => { draft.options.splice(i,1); renderOptList(); });
+    row.append(l, inp, del); box.appendChild(row);
+  });
+}
+
+async function startRound(){
+  const opts = draft.options.map(s => s.trim()).filter(Boolean).map((label, i) => ({ id:"o"+i, label }));
+  if(opts.length < 2){ setMsg("至少需要 2 個選項。"); return; }
+  setMsg("");
+  try{
+    await set(ref(db, "rooms/" + state.room + "/poll"), {
+      question: draft.question.trim() || "請選擇", options: opts, status:"open", round: Date.now()
+    });
+  }catch(e){ setMsg("發佈失敗：" + e.message); }
+}
+
+async function toggleStatus(){
+  if(!state.poll) return;
+  const next = state.poll.status === "open" ? "closed" : "open";
+  try{ await update(ref(db, "rooms/" + state.room + "/poll"), { status: next }); }
+  catch(e){ setMsg("操作失敗：" + e.message); }
+}
+
+function renderTopBtns(){
+  const tb = $("topBtns"); tb.textContent = "";
+  const b = document.createElement("button"); b.className = "btn";
+  b.textContent = state.projection ? "退出投影模式" : "投影模式";
+  b.addEventListener("click", () => {
+    state.projection = !state.projection;
+    document.body.classList.toggle("proj", state.projection);
+    $("host").classList.toggle("hide", state.projection);
+    renderTopBtns(); renderStage();
+  });
+  tb.appendChild(b);
+}
+
+/* ---------- 畫面 ---------- */
+function currentVotes(){
+  const p = state.poll; const c = {}; let total = 0; const names = [];
+  if(!p) return { c, total, names, mine:null };
+  (p.options || []).forEach(o => c[o.id] = 0);
+  const myKey = nameKey(state.name); let mine = null;
+  Object.keys(state.votes).forEach(k => {
+    const v = state.votes[k];
+    if(v && v.round === p.round && c[v.choice] !== undefined){
+      c[v.choice]++; total++; names.push(v.name);
+      if(k === myKey) mine = v.choice;
+    }
+  });
+  return { c, total, names, mine };
+}
+
+function renderStage(){
+  const stage = $("stage"), p = state.poll, badge = $("statusBadge");
+  if(!state.room) return;
+  if(!p){
+    badge.classList.add("hide");
+    stage.innerHTML = '<div class="empty">' + (state.isHost ? "請在下方輸入題目與選項，按「開始投票」。" : "等待主持人出題…") + '</div>';
+    $("meta").textContent = ""; updateToggle(); return;
+  }
+  const open = p.status === "open";
+  badge.classList.remove("hide"); badge.textContent = open ? "投票中" : "已結束";
+  badge.classList.toggle("closed", !open);
+
+  const { c, total, names, mine } = currentVotes();
+  const showResults = state.isHost || !open;
+  const clickable = open && !state.projection;
+
+  stage.textContent = "";
+  const q = document.createElement("h2"); q.id = "question"; q.textContent = p.question; stage.appendChild(q);
+  const list = document.createElement("div"); list.className = "opts";
+  (p.options || []).forEach((o, i) => {
+    const el = document.createElement(clickable ? "button" : "div");
+    el.className = "opt" + (clickable ? " clickable" : "") + (mine === o.id ? " selected" : "");
+    const fill = document.createElement("span"); fill.className = "fill";
+    fill.style.width = showResults && total ? (c[o.id] / total * 100) + "%" : "0";
+    const letter = document.createElement("span"); letter.className = "letter"; letter.textContent = String.fromCharCode(65+i);
+    const label = document.createElement("span"); label.className = "label"; label.textContent = o.label;
+    el.append(fill, letter, label);
+    if(showResults){
+      const num = document.createElement("span"); num.className = "num"; num.textContent = c[o.id];
+      const pct = document.createElement("small"); pct.textContent = total ? Math.round(c[o.id] / total * 100) + "%" : "0%";
+      num.appendChild(pct); el.appendChild(num);
+    }
+    if(clickable) el.addEventListener("click", () => castVote(p, o.id, mine));
+    list.appendChild(el);
+  });
+  stage.appendChild(list);
+
+  let meta;
+  if(state.isHost){
+    meta = "已投票 " + total + " 人" + (names.length ? "：" + names.join("、") : "");
+    if(!open) meta = "投票已結束，共 " + total + " 人投票。";
+  } else if(open){
+    meta = mine ? "你（" + state.name + "）已投票，投票期間可點其他選項改票。結果會在結束後公布。" : "你好，" + state.name + "，請點選你的選擇。";
+  } else {
+    meta = "投票已結束，共 " + total + " 人投票。";
+  }
+  $("meta").textContent = meta;
+  updateToggle();
+}
+
+function updateToggle(){
+  const b = $("toggleBtn"); if(!b || !state.isHost) return;
+  b.disabled = !state.poll;
+  b.textContent = state.poll && state.poll.status !== "open" ? "重新開放投票" : "結束投票";
+}
+
+async function castVote(p, choice, mine){
+  if(state.busy || mine === choice) return;
+  state.busy = true; setMsg("");
+  try{
+    await set(ref(db, "rooms/" + state.room + "/votes/" + nameKey(state.name)), {
+      name: state.name, choice, round: p.round
+    });
+  }catch(e){ setMsg("投票失敗：" + e.message); }
+  state.busy = false;
+}
+</script>
+</body>
+</html>
