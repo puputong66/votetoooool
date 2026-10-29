@@ -125,12 +125,6 @@ body.proj .meta{font-size:22px}
 /* ============================================================
    ★ 設定區：把下面換成你在 Firebase 取得的設定
    ============================================================ */
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDjluQ3WOEZ8L2i8G8XMN2WvltkEaVB4kA",
   authDomain: "team-vote-dd103.firebaseapp.com",
@@ -140,9 +134,6 @@ const firebaseConfig = {
   messagingSenderId: "548939551273",
   appId: "1:548939551273:web:6f0b8eac40f4d282d64238"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 
 // 主持人密碼（輕量防誤觸，不是真正的資安機制，請不要用你常用的密碼）
 const HOST_PIN = "0522";
